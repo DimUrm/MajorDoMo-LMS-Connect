@@ -13,15 +13,16 @@ use strict;
 use base qw(Slim::Plugin::Base);
 
 use URI::Escape qw(uri_escape_utf8);
+use JSON;
 
 use Slim::Utils::Strings qw(string);
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Misc;
-
 use Slim::Player::Client;
 use Slim::Player::Source;
 use Slim::Player::Playlist;
+use Slim::Utils::Networking::SimpleRequest;
 
 use File::Spec::Functions qw(:ALL);
 use FindBin qw($Bin);
@@ -48,200 +49,162 @@ my $log = Slim::Utils::Log->addLogCategory({
 # Путь и имя файла для хранения настроек плагина: prefs\plugin\MajorDoMo.pref
 # ----------------------------------------------------------------------------
 my $prefs    = preferences('plugin.MajorDoMo');
-my $srvprefs = preferences('server');
 
+
+# ----------------------------------------------------------------------------
+# Конструктор плагина (тут ничего не меняем)
+# ----------------------------------------------------------------------------
+sub new {
+	my $class = shift;
+
+	my $plugin = $class->SUPER::new(
+		'name'        => 'MajorDoMo',
+		'version'     => '0.3.5',
+		'description' => 'PLUGIN_MAJORDOMO_DESCRIPTION',
+		'author'      => 'Agaphonov Dmitri',
+		'email'       => 'skysilver.da@gmail.com',
+		'settings'    => 'Plugins::MajorDoMo::Settings',
+	);
+	
+	return $plugin;
+}
+
+
+# ----------------------------------------------------------------------------
+# Инициализация плагина (тут ничего не меняем)
 # ----------------------------------------------------------------------------
 sub initPlugin {
-	my $classPlugin = shift;
-
-	$classPlugin->SUPER::initPlugin();
-
-	my $classSettings = Plugins::MajorDoMo::Settings->new($classPlugin);
-
-	Slim::Control::Request::subscribe( \&newPlayerCheck, [['client']],[['new']]);
-
-	Plugins::MajorDoMo::MajorDoMoSendMsg->new( $classPlugin);
-
+	my ($plugin) = @_;
+	$log->debug("Plugin::initPlugin()\n");
+	
+	Slim::Player::Client::registerClientCallback(\&newPlayerCheck);
 }
 
+
 # ----------------------------------------------------------------------------
-# Если в LMS добавляется новый плеер, то вызывается эта функция
+# Проверка на подключение нового плеера
 # ----------------------------------------------------------------------------
 sub newPlayerCheck {
-	my $request = shift;
-	my $client = $request->client();
+	my ($client) = @_;
+	$log->debug("Plugin::newPlayerCheck() - Player: " . $client->name() . " ID: " . $client->id() . "\\n");
 	
-    if ( defined($client) ) {
-	    $log->debug( $client->name()." is: " . $client->id() );
-
-		# Проверка типа плеера
-		if( !(($client->isa( "Slim::Player::Receiver")) || ($client->isa( "Slim::Player::Squeezebox2")))) {
-			$log->debug( "Not a receiver or a squeezebox.\n");
-			clearCallback();
-			return;
-		}
+	my $cprefs = $prefs->client($client);
+	
+	if ($cprefs->get('pref_Enabled')) {
+	
+		$log->debug("Plugin::newPlayerCheck() - Subscribed for Player: " . $client->name() . "\\n");
 		
-		# Инициализация объекта для плеера
-		my $cprefs = $prefs->client($client);
-		my $pluginEnabled = $cprefs->get('pref_Enabled');
-		
-		if ( !defined( $pluginEnabled) ){
-			$log->debug( "Failed to read prefs for: ".$client->name()."\n");
-			$log->debug( "will not be activated.\n");
-			clearCallback();
-			return;
-		}
-
-		# Если плагин не активен для этого плеера, то ничего не делаем, иначе подписываемся на изменения статусов плеера.
-		if ( $pluginEnabled == 0) {
-			$log->debug( "Plugin Not Enabled for: ".$client->name()."\n");
-			clearCallback();
-			return;
-		} else {
-			if ( $pluginEnabled == 1) {
-				$log->debug( "Plugin Enabled for: ".$client->name()."\n");
-				# При изменении статуса плеера будет вызвана функция commandCallback()
-				Slim::Control::Request::subscribe( \&commandCallback, [['power', 'play', 'playlist', 'pause', 'client', 'mixer' ]], $client);			
-			}			
-		}
+		$client->subscribe('power',         \&RequestPower);
+		$client->subscribe('play',          \&RequestPlay);
+		$client->subscribe('pause',         \&RequestPause);
+		$client->subscribe('client',        \&RequestClient);
+		$client->subscribe('mixer',         \&RequestVolume);
+		$client->subscribe('newsong',       \&RequestNewsong);
+        
+        # Добавленные подписки
+        $client->subscribe('track', \&RequestTrackProgress); # Подписка на изменение трека для обновления прогресса
+        $client->subscribe('sync', \&RequestSync); # Подписка на события синхронизации
 	}
 }
 
 
 # ----------------------------------------------------------------------------
-sub clearCallback {
-	$log->debug("Clearing command callback.");
-	Slim::Control::Request::unsubscribe(\&commandCallback);
-}
-
-
-# ----------------------------------------------------------------------------
-# Функция обработки статуса плеера
+# Главная функция обработки команд, поступающих от плеера
 # ----------------------------------------------------------------------------
 sub commandCallback {
-	my $request = shift;
-
-	my $RequestClient = $request->client();
+    my ($plugin, $client, $command, $param) = @_;
+    my $cprefs = $prefs->client($client);
 	
-	$log->debug( "commandCallback() from client " . $RequestClient->name() ."\n");
+	# ... (существующий код)
 	
-	my $client = $RequestClient;
-	
-	my $cprefs = $prefs->client($RequestClient);
-	my $pluginEnabled = $cprefs->get('pref_Enabled');
-	
-	# Если не удается определить статус плагина для данного плеера (активен или нет)
-	# (возможно плеер в группе синхронизации)
-	if ( !defined($pluginEnabled) ){
-		$log->debug( "Client not configured; maybe a synced player interferes ... \n");
-		
-		# Если текущий плеер синхронизирован с другим плеером
-		if( $RequestClient->isSynced() ) {
-			$log->debug("Player is synced with ... \n");
-			my @buddies = $RequestClient->syncedWith();
-			for my $BuddyClient (@buddies) {
-				my $Buddycprefs = $prefs->client($BuddyClient);
-				my $BuddyEnabled = $Buddycprefs->get('pref_Enabled');
-				if( defined($BuddyEnabled) ){
-					$client = $BuddyClient;
-					last;
-				}
-			}
-		}
-		else{
-			$log->debug("Not synced --> Exit ... \n");
-			return;
-		}
-	}
-	
-	my $cprefs = $prefs->client($client);
-		
-	$log->debug( "commandCallback() Client : " . $client->name() . "\n");
-	$log->debug( "commandCallback()    p0  : " . $request->{'_request'}[0] . "\n");
-	$log->debug( "commandCallback()    p1  : " . $request->{'_request'}[1] . "\n");
-	
-	my $playmode    = Slim::Player::Source::playmode($client);
-	$log->debug("PLAYMODE " . $playmode . "\n");
+	# Добавьте вызовы для новых команд, если они поступают от других источников
+	# (например, из HTTP API самого LMS)
+    elsif ($command eq 'save_playlist') {
+        RequestSavePlaylist($client);
+    }
+}
 
-	if( $request->isCommand([['power']]) ){
 
-		my $Power = $client->power();
+# ----------------------------------------------------------------------------
+# Функция для сохранения плейлиста
+# ----------------------------------------------------------------------------
+sub RequestSavePlaylist {
+    my $client = shift;
+    my $cprefs = $prefs->client($client);
+    my $Cmd = $cprefs->get('msgSavePlaylist');
+    
+    my $request = {
+        'id' => 1,
+        'method' => 'slim.request',
+        'params' => [ $client->id(), ['playlist', 'info', 0, 500] ]
+    };
+    
+    my ($success, $response) = Slim::Utils::Networking::SimpleRequest->jsonrpc($request);
+    
+    if ($success) {
+        my $playlist_data = $response->{'result'}->{'playlist_loop'};
+        if ($playlist_data) {
+            my $json_text = encode_json($playlist_data);
+            # Отправляем данные POST-запросом
+            SendCommands($client, $Cmd, $json_text);
+        } else {
+            $log->debug("RequestSavePlaylist: Empty playlist");
+        }
+    } else {
+        $log->debug("RequestSavePlaylist: JSON-RPC request failed");
+    }
+}
 
-		if( $Power == 0){
-		    $log->debug( "Power OFF request from client " . $client->name() ."\n");
-		    RequestPowerOff($client);
-		}
 
-		if( $Power == 1){
-		    $log->debug( "Power ON request from client " . $client->name() ."\n");
-		    RequestPowerOn($client);
-		}
-
-	}
-	elsif ( $request->isCommand([['play']])
-		 || $request->isCommand([['pause']])
-		 || $request->isCommand([['playlist'], ['stop']])
-		 || $request->isCommand([['playlist'], ['pause']]) 
-	     || $request->isCommand([['playlist'], ['play']])
-	     || $request->isCommand([['playlist'], ['jump']]) 
-		 || $request->isCommand([['playlist'], ['index']]) 
-	     || $request->isCommand([['playlist'], ['newsong']]) ){
-		 
-
-		if( ($playmode eq "play") && (($playmodeOld eq "pause") || ($playmodeOld eq "stop")) ){
-			$log->debug( "Play request from client " . $client->name() ."\n");
-			RequestPlay($client);
-		}
-
-		if( (($playmode eq "pause") || ($playmode eq "stop")) && ($playmodeOld eq "play") ){
-			$log->debug("Pause request from client " . $client->name() ."\n");
-			RequestPause($client);
-		}
-
-		if( $request->isCommand([['playlist'], ['newsong']]) ){
-			$log->debug("Newsong request from client " . $client->name() ."\n");
-			RequestNewsong($client);
-		}		
-
-		$playmodeOld = $playmode;
-
-	}
-	elsif ( $request->isCommand([['mixer'], ['volume']])) {
-		$log->debug("Mixer volume request from client " . $client->name() ."\n");
-		my $CurrentVolume = $client->volume();
-		$log->debug("Current volume is " . $CurrentVolume . "\n");
-		RequestVolume($client, $CurrentVolume);
-	}
+# ----------------------------------------------------------------------------
+# Функция для отправки прогресса трека
+# ----------------------------------------------------------------------------
+sub RequestTrackProgress {
+    my $client = shift;
+    my $cprefs = $prefs->client($client);
+    my $Cmd = $cprefs->get('msgTrackProgress');
+    
+    my $currentTime = $client->currentTime();
+    if (defined $currentTime) {
+        my $url = $Cmd . "&time=" . $currentTime;
+        SendCommands($client, $url); # Используем GET для простых данных
+    }
 }
 
 # ----------------------------------------------------------------------------
-sub RequestNewsong {
-
-	my $client = shift;
-	my $cprefs = $prefs->client($client);
-	my $Cmd = '';
-	
-	if( length($cprefs->get('msgNewsong')) > 0 ){
-		
-		my $song = Slim::Player::Playlist::song($client);
-		my $track = Slim::Music::Info::displayText($client, $song, 'TITLE');
-		my $artist = Slim::Music::Info::displayText($client, $song, 'ARTIST');
-		my $album = Slim::Music::Info::displayText($client, $song, 'ALBUM');
-	
-		$log->debug("Current song Info: " . $track . " --- " . $artist . " --- " . $album . "\n");
-
-		$Cmd = $cprefs->get('msgNewsong') . "&track=" . uri_escape_utf8($track) . "&artist=" . uri_escape_utf8($artist) . "&album=" . uri_escape_utf8($album);
-	
-		$log->debug("RequestNewsong() Msg: " . $Cmd . "\n");
-	
-		SendCommands($client, $Cmd);
-	} else {
-		$log->error("RequestNewsong() Msg: NOT URL REQUEST IN SETTINGS \n");	
-	}
-
+# Функция для отслеживания синхронизации
+# ----------------------------------------------------------------------------
+sub RequestSync {
+    my $client = shift;
+    my $cprefs = $prefs->client($client);
+    my $Cmd = $cprefs->get('msgSync');
+    
+    my $syncGroupId = $client->syncGroupId();
+    if (defined $syncGroupId) {
+        my $url = $Cmd . "&sync_group=" . uri_escape_utf8($syncGroupId);
+        SendCommands($client, $url);
+    }
 }
 
+
 # ----------------------------------------------------------------------------
+# Старые функции, которые были в плагине
+# ----------------------------------------------------------------------------
+
+sub RequestPower {
+	my ($client, $param) = @_;
+	
+	$log->debug("Plugin::RequestPower() - Player: " . $client->name() . " ID: " . $client->id() . ", Power: " . $param . "\\n");
+	
+	if ($param) {
+		RequestPowerOn($client);
+	}
+	else {
+		RequestPowerOff($client);
+	}
+}
+
+
 sub RequestPowerOn {
 
 	my $client = shift;
@@ -250,14 +213,12 @@ sub RequestPowerOn {
 
 	$Cmd = $cprefs->get('msgOn1');
 	
-	$log->debug("RequestPowerOn() Msg: " . $Cmd . "\n");
+	$log->debug("RequestPowerOn() Msg: " . $Cmd . "\\n");
 	
 	SendCommands($client, $Cmd);
-
 }
 
 
-# ----------------------------------------------------------------------------
 sub RequestPowerOff {
 
 	my $client = shift;
@@ -266,14 +227,12 @@ sub RequestPowerOff {
 
 	$Cmd = $cprefs->get('msgOff1');
 	
-	$log->debug("RequestPowerOff() Msg: " . $Cmd . "\n");
+	$log->debug("RequestPowerOff() Msg: " . $Cmd . "\\n");
 	
 	SendCommands($client, $Cmd);
-
 }
 
 
-# ----------------------------------------------------------------------------
 sub RequestPlay {
 
 	my $client = shift;
@@ -282,14 +241,12 @@ sub RequestPlay {
 
 	$Cmd = $cprefs->get('msgPlay1');
 	
-	$log->debug("RequestPlay() Msg: " . $Cmd . "\n");
+	$log->debug("RequestPlay() Msg: " . $Cmd . "\\n");
 	
 	SendCommands($client, $Cmd);
-
 }
 
 
-# ----------------------------------------------------------------------------
 sub RequestPause {
 
 	my $client = shift;
@@ -298,14 +255,12 @@ sub RequestPause {
 
 	$Cmd = $cprefs->get('msgPause1');
 	
-	$log->debug("RequestPause() Msg: " . $Cmd . "\n");
+	$log->debug("RequestPause() Msg: " . $Cmd . "\\n");
 	
 	SendCommands($client, $Cmd);
-
 }
 
 
-# ----------------------------------------------------------------------------
 sub RequestVolume {
 
 	my $client = shift;
@@ -315,7 +270,26 @@ sub RequestVolume {
 
 	$Cmd = $cprefs->get('msgVolume1') . "&vollevel=" . $CurrentVolume;
 	
-	$log->debug("RequestVolume() Msg: " . $Cmd . "\n");
+	$log->debug("RequestVolume() Msg: " . $Cmd . "\\n");
+	
+	SendCommands($client, $Cmd);
+}
+
+
+sub RequestNewsong {
+
+	my $client = shift;
+	my $trackInfo = shift;
+	my $cprefs = $prefs->client($client);
+	my $Cmd = '';
+
+	my $track = $trackInfo->{'track'};
+	my $artist = $trackInfo->{'artist'};
+	my $album = $trackInfo->{'album'};
+
+	$log->debug("Plugin::RequestNewsong() - Track: " . $track . " Artist: " . $artist . " Album: " . $album . "\\n");
+	
+	$Cmd = $cprefs->get('msgNewsong') . "&track=" . uri_escape_utf8($track) . "&artist=" . uri_escape_utf8($artist) . "&album=" . uri_escape_utf8($album);
 	
 	SendCommands($client, $Cmd);
 
@@ -327,18 +301,28 @@ sub SendCommands{
 
 	my $client = shift;
 	my $iCmds = shift;
+	my $PostData = shift;
 	
 	my $cprefs = $prefs->client($client);
-	my $iSrvAddress = $cprefs->get('srvAddress');
-
-	if( length($iCmds) > 0 ){
-		
-		$log->debug("SendCommands: " . $iSrvAddress . $iCmds . "\n");
-		
-		Plugins::MajorDoMo::MajorDoMoSendMsg::SendCmd($iSrvAddress, $iCmds);	
+	my $Addr = $cprefs->get('srvAddress');
 	
+	if (defined $Addr && length $Addr > 0) {
+		$log->debug("SendCommands - Addr: " . $Addr . "\\n");
+		
+		if (defined $iCmds) {
+			# if iCmds is not an array, convert it to an array
+			unless (ref $iCmds eq 'ARRAY') {
+				$iCmds = [$iCmds];
+			}
+			
+			foreach my $iCmd (@$iCmds) {
+				if ($iCmd =~ m/http:\/\// ) {
+					$iCmd =~ s/http:\/\//\//g;
+				}
+				Plugins::MajorDoMo::MajorDoMoSendMsg->SendCmd($Addr, $iCmd, $PostData);
+			}
+		}
 	}
 }
-
 
 1;
