@@ -5,7 +5,7 @@
 #	Copyright (c) 2015 Agaphonov Dmitri
 #	All rights reserved.
 #
-#	2016-12-06 Add track info request
+#	2025-9-01 Update
 
 package Plugins::MajorDoMo::Plugin;
 use strict;
