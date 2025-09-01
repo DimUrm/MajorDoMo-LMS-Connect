@@ -48,12 +48,18 @@
 			<input type="text" class="stdedit" name="msgNewsong" id="msgNewsong" value="[% prefs.msgNewsong %]" size="80" />
 		[% END %]
 		
+		[% WRAPPER settingGroup title="PLUGIN_MAJORDOMO_SAVE_PLAYLIST_MSG" desc="PLUGIN_MAJORDOMO_SAVE_PLAYLIST_MSG_DESC" %]
+			<input type="text" class="stdedit" name="msgSavePlaylist" id="msgSavePlaylist" value="[% prefs.msgSavePlaylist %]" size="80" />
+		[% END %]
+		
+		[% WRAPPER settingGroup title="PLUGIN_MAJORDOMO_TRACK_PROGRESS_MSG" desc="PLUGIN_MAJORDOMO_TRACK_PROGRESS_MSG_DESC" %]
+			<input type="text" class="stdedit" name="msgTrackProgress" id="msgTrackProgress" value="[% prefs.msgTrackProgress %]" size="80" />
+		[% END %]
+		
+		[% WRAPPER settingGroup title="PLUGIN_MAJORDOMO_SYNC_MSG" desc="PLUGIN_MAJORDOMO_SYNC_MSG_DESC" %]
+			<input type="text" class="stdedit" name="msgSync" id="msgSync" value="[% prefs.msgSync %]" size="80" />
+		[% END %]
+		
 	[% END %]
 
-	[% WRAPPER setting title=" " %][% END %]	
-
-	[% WRAPPER settingSection %]
-		[% WRAPPER settingGroup title="PLUGIN_MAJORDOMO_SAVE" %][% END %]
-	[% END %]
-	
 [% PROCESS settings/footer.html %]
