@@ -36,10 +36,10 @@ PLUGIN_MAJORDOMO_ONMSG_DESC
 
 PLUGIN_MAJORDOMO_OFFMSG
 	RU	Команда при выключении плеера
-	
+
 PLUGIN_MAJORDOMO_OFFMSG_DESC
 	RU	Например "/objects/?script=lms&player=mr3020&status=off", запускает сценарий с названием "lms" и передает ему параметры "player" (равный "mr3020") и "status" (равный "off").
-	
+
 PLUGIN_MAJORDOMO_PLAYMSG
 	RU	Команда при старте проигрывания
 
@@ -62,4 +62,22 @@ PLUGIN_MAJORDOMO_NEWSONGMSG
 	RU	Команда при смене трека
 
 PLUGIN_MAJORDOMO_NEWSONGMSG_DESC
-	RU	Например "/objects/?script=lms&player=mr3020&status=newsong", запускает сценарий с названием "lms" и передает ему параметры "player" (равный "mr3020") и "status" (равный "newsong"). При выполнении этого HTTP-запроса в сценарий также передаются параметры "track" (название трека), "artist" (исполнитель) и "album" (название альбома). Чтобы корректно обработать кириллицу, необходимо эти параметры декодировать на стороне MajorDoMo с помощью функции urldecode().
+	RU	Например "/objects/?script=lms&player=mr3020&status=newsong", запускает сценарий с названием "lms" и передает ему параметры "track" (название трека), "artist" (исполнитель) и "album" (название альбома). Чтобы корректно обработать кириллицу, необходимо эти параметры декодировать на стороне MajorDoMo с помощью функции urldecode().
+
+PLUGIN_MAJORDOMO_SAVE_PLAYLIST_MSG
+	RU	Команда для сохранения плейлиста
+	
+PLUGIN_MAJORDOMO_SAVE_PLAYLIST_MSG_DESC
+	RU	Отправляет содержимое текущего плейлиста на сервер MajorDoMo (POST-запрос с JSON).
+
+PLUGIN_MAJORDOMO_TRACK_PROGRESS_MSG
+	RU	Команда для отправки прогресса трека
+	
+PLUGIN_MAJORDOMO_TRACK_PROGRESS_MSG_DESC
+	RU	Отправляет текущую позицию в треке (таймкод) в секундах.
+
+PLUGIN_MAJORDOMO_SYNC_MSG
+	RU	Команда при изменении синхронизации
+	
+PLUGIN_MAJORDOMO_SYNC_MSG_DESC
+	RU	Отправляет данные о группе синхронизации плееров.
