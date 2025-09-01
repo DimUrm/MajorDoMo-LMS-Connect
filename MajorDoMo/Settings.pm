@@ -1,10 +1,10 @@
 package Plugins::MajorDoMo::Settings;
 
 use strict;
-use base qw(Slim::Web::Settings); 		#для использования веб-интерфейса
-use Slim::Utils::Strings qw(string); 	#для использования строк из текстовых файлов
-use Slim::Utils::Log; 					#для возможности логирования
-use Slim::Utils::Prefs; 				#для доступа к файлам настроек
+use base qw(Slim::Web::Settings);
+use Slim::Utils::Strings qw(string);
+use Slim::Utils::Log;
+use Slim::Utils::Prefs;
 
 # ----------------------------------------------------------------------------
 # Глобальные переменные
@@ -13,7 +13,7 @@ use Slim::Utils::Prefs; 				#для доступа к файлам настро�
 # ----------------------------------------------------------------------------
 # Общие настройки
 # ----------------------------------------------------------------------------
-my $classPlugin		= undef;
+my $classPlugin	= undef;
 
 my $log = Slim::Utils::Log->addLogCategory({
 	'category'     => 'plugin.MajorDoMo',
@@ -34,95 +34,38 @@ sub new {
 
 	$classPlugin = shift;
 
-	$log->debug( "Settings::new() " . $classPlugin . "\n");
+	$log->debug( "Settings::new() " . $classPlugin . "\\n");
 
-	$class->SUPER::new();	
-
+	$class->SUPER::new();
+	
 	return $class;
 }
 
-# ----------------------------------------------------------------------------
-# Название пункта настроек плагина в веб-интерфейсе
-# ----------------------------------------------------------------------------
-sub name {
-	return 'PLUGIN_MAJORDOMO_MODULE_NAME';
-}
 
 # ----------------------------------------------------------------------------
-# Путь к странице настроек
-# ----------------------------------------------------------------------------
-sub page { #какой файл использовать в качестве веб страницы
-	return 'plugins/MajorDoMo/settings/basic.html';
-}
-
-# ----------------------------------------------------------------------------
-# Настройки индивидуальные для каждого плеера, поэтому возвращаем 1
-# ----------------------------------------------------------------------------
-sub needsClient {
-	return 1;
-}
-
-# ----------------------------------------------------------------------------
-# Выбираем для каких плееров можно использовать этот плагин
-# ----------------------------------------------------------------------------
-sub validFor {
-	my $class = shift;
-	my $client = shift;
-	
-	return $client->isPlayer && ($client->isa('Slim::Player::Receiver') || 
-		                         $client->isa('Slim::Player::Squeezebox2') ||
-								 $client->isa('Slim::Player::SqueezeLite') ||
-		                         $client->isa('Slim::Player::SqueezeSlave'));
-}
-
-# ----------------------------------------------------------------------------
-# Обработчик страницы настроек плагина
+# Запуск и остановка
 # ----------------------------------------------------------------------------
 sub handler {
-	my ($class, $client, $params) = @_; 
+	my $this = shift;
+	my ($params, $client) = @_;
 	
-	# $client - объект клиента (плеера), который выбран в веб-интерфейсе
-	# Клиенты идентифицируются по 'playerid', равному мак-адресу плеера.
+	$log->debug("Settings::handler() - Params: " . $params . " Client: " . $client . "\\n");
 
-	my @playerItems = Slim::Player::Client::clients();
-	foreach my $play (@playerItems) {
-		if( $params->{'playerid'} eq $play->macaddress()) {
-			$client = $play;
-			last;
-		}
-	}
-	if( !defined( $client)) {
-		return $class->SUPER::handler($client, $params); 
-		$log->debug( "found player: " . $client . "\n");
-	}
-
-	if( !$params->{'playername'}) {
-		$params->{'playername'} = $client->name(); 
-		$log->debug( "player name: " . $params->{'playername'} . "\n");
-	}
-	
-	# Функция, вызываемая при нажатии на кнопку "Сохранить"
-	if ($params->{'saveSettings'}) {
-		
-		#Сохраняем значения в файл настроек
-		
-		if ($params->{'pref_Enabled'}){ #Статус плагина для плеера - включен или выключен
+	if ($params) {
+		if ($params->{'pref_Enabled'}) { 
 			$prefs->client($client)->set('pref_Enabled', 1); 
-		} else {
-			$prefs->client($client)->set('pref_Enabled', 0);
+		} else { 
+			$prefs->client($client)->set('pref_Enabled', 0); 
 		}
 		
-		
-		if ($params->{'srvAddress'}) { #IP-адрес сервера MajorDoMo
+		if ($params->{'srvAddress'}) {
 			my $srvAddress = $params->{'srvAddress'};
-			$srvAddress =~ s/^(\s*)(.*)(\s*)$/$2/;
-			$prefs->client($client)->set('srvAddress', "$srvAddress"); 
+			$prefs->client($client)->set('srvAddress', "$srvAddress");
 		}
 		
-		# HTTP-запросы для разных состояний плеера
-		if ($params->{'msgOn1'}) { 
+		if ($params->{'msgOn1'}) {
 			my $msgOn1 = $params->{'msgOn1'};
-			$prefs->client($client)->set('msgOn1', "$msgOn1"); 
+			$prefs->client($client)->set('msgOn1', "$msgOn1");
 		}
 		if ($params->{'msgOff1'}) { 
 			my $msgOff1 = $params->{'msgOff1'};
@@ -144,7 +87,20 @@ sub handler {
 			my $msgNewsong = $params->{'msgNewsong'};
 			$prefs->client($client)->set('msgNewsong', "$msgNewsong"); 
 		}
-		
+        
+        # Добавленные параметры
+		if ($params->{'msgSavePlaylist'}) {
+			my $msgSavePlaylist = $params->{'msgSavePlaylist'};
+			$prefs->client($client)->set('msgSavePlaylist', "$msgSavePlaylist");
+		}
+		if ($params->{'msgTrackProgress'}) {
+			my $msgTrackProgress = $params->{'msgTrackProgress'};
+			$prefs->client($client)->set('msgTrackProgress', "$msgTrackProgress");
+		}
+		if ($params->{'msgSync'}) {
+			my $msgSync = $params->{'msgSync'};
+			$prefs->client($client)->set('msgSync', "$msgSync");
+		}
 	}
 
 	# Заполняем поля на странице настроек плагина в веб-интерфейсе.
@@ -158,14 +114,16 @@ sub handler {
 	$params->{'prefs'}->{'msgOff1'} = $prefs->client($client)->get('msgOff1'); 
 	$params->{'prefs'}->{'msgPlay1'} = $prefs->client($client)->get('msgPlay1'); 
 	$params->{'prefs'}->{'msgPause1'} = $prefs->client($client)->get('msgPause1'); 
-	$params->{'prefs'}->{'msgVolume1'} = $prefs->client($client)->get('msgVolume1');
-	$params->{'prefs'}->{'msgNewsong'} = $prefs->client($client)->get('msgNewsong');  
+	$params->{'prefs'}->{'msgVolume1'} = $prefs->client($client)->get('msgVolume1'); 
+	$params->{'prefs'}->{'msgNewsong'} = $prefs->client($client)->get('msgNewsong'); 
 	
-	return $class->SUPER::handler($client, $params);
+    # Заполняем новые поля
+	$params->{'prefs'}->{'msgSavePlaylist'} = $prefs->client($client)->get('msgSavePlaylist');
+	$params->{'prefs'}->{'msgTrackProgress'} = $prefs->client($client)->get('msgTrackProgress');
+	$params->{'prefs'}->{'msgSync'} = $prefs->client($client)->get('msgSync');
+
+	return $this->SUPER::handler($params, $client);
 }
 
+
 1;
-
-__END__
-
-pref_Enabled
