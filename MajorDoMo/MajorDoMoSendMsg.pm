@@ -12,10 +12,10 @@ use strict;
 use base qw(Slim::Networking::Async);
 
 use URI;
-use Slim::Utils::Log;					#для возможности логирования
+use Slim::Utils::Log;
 use Slim::Utils::Misc;
-use Slim::Utils::Prefs;					#для использования веб-интерфейса
-use Slim::Networking::SimpleAsyncHTTP;	#для выполнения асинхронных HTTP-запросов
+use Slim::Utils::Prefs;
+use Slim::Networking::SimpleAsyncHTTP;
 use Socket qw(:crlf);
 
 
@@ -44,39 +44,37 @@ sub new {
 	my $ref = shift;
 	$classPlugin = shift;
 
-	$log->debug( "MajorDoMoSendMsg::new() " . $classPlugin . "\n");
-	$self = $ref->SUPER::new;
+	$log->debug( "MajorDoMoSendMsg::new() " . $classPlugin . "\\n");
+
+	return $ref->SUPER::new();
 }
 
-# ----------------------------------------------------------------------------
-# Функция обработки строки HTTP-запроса
-# ----------------------------------------------------------------------------
-sub SendCmd{
-	my $Addr = shift;
-	my $Cmd = shift;
-	my $timeout = 1;
-	
-	$log->debug("SendCmd - Addr: " . $Addr . ", Cmd: " . $Cmd . "\n");
-	
-	my $http = "http://";
-	
-	if( index($Addr, $http) == 0 ) {
-		HTTPSend($Addr, $Cmd);
-	}
-	else{
-		$log->debug("SendCmd - Wrong server address. \n");
-	}	
-}
 
 # ----------------------------------------------------------------------------
-# Функция выполнения HTTP-запроса
+# Функции-заглушки для обработки успешных и ошибочных ответов HTTP
+# ----------------------------------------------------------------------------
+sub HttpSuccess {
+    my $http = shift;
+    my $response = $http->response();
+    $log->debug("HttpSuccess - URL: " . $http->url() . ", Code: " . $response->code() . ", Message: " . $response->message() . "\\n");
+}
+
+
+sub HttpError {
+    my $http = shift;
+    $log->error("HttpError - URL: " . $http->url() . ", Message: " . $http->error() . "\\n");
+}
+
+
+# ----------------------------------------------------------------------------
+# Функция выполнения HTTP-запроса (GET)
 # ----------------------------------------------------------------------------
 sub HTTPSend{
 	my $Addr = shift;
 	my $Cmd = shift;
 	my $timeout = 1;
 	
-	$log->debug("HTTPSend - Addr: " . $Addr . ", Cmd: " . $Cmd . "\n");
+	$log->debug("HTTPSend - Addr: " . $Addr . ", Cmd: " . $Cmd . "\\n");
 	
 	my $http = Slim::Networking::SimpleAsyncHTTP->new(
 			\&HttpSuccess,
@@ -95,21 +93,54 @@ sub HTTPSend{
 
 
 # ----------------------------------------------------------------------------
-sub HttpError {
-    my $http = shift;
-
-    $log->debug("Error HTTP send! \n");
+# Функция выполнения HTTP-запроса (POST)
+# ----------------------------------------------------------------------------
+sub HTTPSendPOST{
+	my $Addr = shift;
+	my $Cmd = shift;
+	my $PostData = shift;
+	my $timeout = 1;
+	
+	$log->debug("HTTPSendPOST - Addr: " . $Addr . ", Cmd: " . $Cmd . ", PostData: " . $PostData . "\\n");
+	
+	my $http = Slim::Networking::SimpleAsyncHTTP->new(
+		\&HttpSuccess,
+		\&HttpError,
+		{
+			'cache' => 0,
+			'timeout' => $timeout,
+			'method' => 'POST',
+			'content' => $PostData,
+			'headers' => {'Content-Type' => 'application/json'}
+		}
+	);
+	
+	my $url = $Addr . $Cmd;
+	
+	$http->get($url);
 }
 
 
 # ----------------------------------------------------------------------------
-sub HttpSuccess{
-    my $http = shift;
-
-    my $content = $http->content();
+# Функция обработки строки HTTP-запроса
+# ----------------------------------------------------------------------------
+sub SendCmd{
+	my $Addr = shift;
+	my $Cmd = shift;
+	my $PostData = shift;
 	
-	$log->debug("HTTP Response: " . $content . "\n");
+	$log->debug("SendCmd - Addr: " . $Addr . ", Cmd: " . $Cmd . ", PostData: " . (defined $PostData ? substr($PostData, 0, 50) . "..." : "undef") . "\\n");
+	
+	my $http = "http://";
+	
+	if( index($Addr, $http) == 0 ) {
+		if (defined $PostData && length $PostData > 0) {
+			HTTPSendPOST($Addr, $Cmd, $PostData);
+		} else {
+			HTTPSend($Addr, $Cmd);
+		}
+	}
+	else{
+		$log->debug("SendCmd - Wrong server address. \\n");
+	}	
 }
-
-
-1;
