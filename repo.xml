@@ -5,7 +5,7 @@
 <title lang="RU">MajorDoMo</title>
 <desc lang="EN">Plugin for integration of LMS with MajorDoMo system</desc>
 <desc lang="RU">Плагин для интеграции LMS с системой домашней автоматизации MajorDoMo</desc>
-<url>https://github.com/DimUrm/MajorDoMo-LMS-Connect/blob/master/MajorDoMo-v0.3.6.zip</url>
+<url>https://github.com/DimUrm/MajorDoMo-LMS-Connect/releases/tag/v0.3.5.zip</url>
 <link>https://github.com/DimUrm/MajorDoMo-LMS-Connect/</link>
 <creator>Agaphonov Dmitri</creator>
 <email>dimetorius@gmail.com</email>
