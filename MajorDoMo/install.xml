@@ -5,7 +5,7 @@
     <defaultState>enabled</defaultState>
     <description>PLUGIN_MAJORDOMO_DESCRIPTION</description>
     <email>dimetorius@gmail.com</email>
-    <homepageURL>http://DimUrm.github.io/MajorDoMo-LMS-Connect</homepageURL>
+    <homepageURL>https://github.com/DimUrm/MajorDoMo-LMS-Connect/blob/master/MajorDoMo/</homepageURL>
 	<icon>plugins/MajorDoMo/html/images/MajorDoMo.png</icon>
     <module>Plugins::MajorDoMo::Plugin</module>
 	<targetApplication>
