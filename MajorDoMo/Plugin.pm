@@ -1,8 +1,8 @@
 #	MajorDoMo Connect Plug-in
 #
-#	Author:	Agaphonov Dmitri <skysilver.da@gmail.com>
+#	Author:	Ur Dmitri <dimetorius@gmail.com>
 #
-#	Copyright (c) 2015 Agaphonov Dmitri
+#	Copyright (c) 2025 Ur Dmitri
 #	All rights reserved.
 #
 #	2025-9-01 Update
@@ -59,10 +59,10 @@ sub new {
 
 	my $plugin = $class->SUPER::new(
 		'name'        => 'MajorDoMo',
-		'version'     => '0.3.5',
+		'version'     => '0.3.6',
 		'description' => 'PLUGIN_MAJORDOMO_DESCRIPTION',
-		'author'      => 'Agaphonov Dmitri',
-		'email'       => 'skysilver.da@gmail.com',
+		'author'      => 'Ur Dmitri',
+		'email'       => 'dimetorius@gmail.com',
 		'settings'    => 'Plugins::MajorDoMo::Settings',
 	);
 	
