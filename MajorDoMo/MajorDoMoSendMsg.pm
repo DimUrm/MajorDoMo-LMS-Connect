@@ -1,8 +1,8 @@
 #	MajorDoMo Connect Plug-in
 #
-#	Author:	Agaphonov Dmitri <skysilver.da@gmail.com>
+#	Author:	Ur Dmitri <dimetorius@gmail.com>
 #
-#	Copyright (c) 2015 Agaphonov Dmitri
+#	Copyright (c) 2025 Ur Dmitri
 #	All rights reserved.
 #
 
